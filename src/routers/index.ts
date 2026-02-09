@@ -1,0 +1,44 @@
+import { Router } from "express";
+
+import authRouter from "./auth.router";
+import userRouter from "./user.router";
+import storeRouter from "./store.router";
+import shortsRouter from "./short.router";
+import contentActionRouter from "./contentAction.router";
+import aboutRouter from "./about.router";
+import reportProblemRouter from "./reportProblem.router";
+import categoryRouter from "./category.router";
+import postRouter from "./post.router";
+import searchRouter from "./search.router";
+import playlistRouter from "./playlist.router";
+import notificationRouter from "./notification.router";
+import cartRouter from "./cart.router";
+import streamRouter from "./stream.router";
+import subscriptionRouter from "./subscription.router";
+import orderRouter from "./order.router";
+import eventRouter from "./event.router";
+import ticketOrderRouter from "./ticketOrder.router";
+import adminRouter from "./admin.router";
+const router = Router();
+
+router.use("/auth", authRouter);
+router.use("/user", userRouter);
+router.use("/shorts", shortsRouter);
+router.use("/content-action", contentActionRouter);
+router.use("/store", storeRouter);
+router.use("/report-problem", reportProblemRouter);
+router.use("/category", categoryRouter);
+router.use("/about", aboutRouter);
+router.use("/post", postRouter);
+router.use("/search", searchRouter);
+router.use("/stream", streamRouter);
+router.use("/playlist", playlistRouter);
+router.use("/notification", notificationRouter);
+router.use("/cart", cartRouter);
+router.use("/subscription", subscriptionRouter);
+router.use("/order", orderRouter);
+router.use("/events", eventRouter);
+router.use("/ticket-orders", ticketOrderRouter);
+router.use("/admin", adminRouter);
+
+export default router;
