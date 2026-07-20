@@ -323,7 +323,7 @@ export const httpCompleteUserProfile = async (req: Request, res: Response) => {
       return BadRequestErrorResponse(res, "Email verification is pending");
     }
 
-    if (!redisUser.username || !redisUser.password) {
+    if (!redisUser.email || !redisUser.username || !redisUser.password) {
       return BadRequestErrorResponse(res, "Username or password not saved");
     }
 
