@@ -48,16 +48,33 @@ export const httpSignUpWithNumber = async (req: Request, res: Response) => {
     const { uuid, idToken, deviceInfo, phoneNumber: bodyPhone } = req.body;
     let phoneNumber: string | undefined;
 
-    // Local/dev bypass: accept phoneNumber directly when Firebase SMS is unavailable
-    if (
-      NODE_ENV === "development" &&
+    // Simulator / debug bypass: accept phoneNumber when Firebase SMS is unavailable.
+    // Allowed in local development OR when OTP_DEBUG=true (Railway testing).
+    const allowDevPhoneBypass =
+      (NODE_ENV === "development" || OTP_DEBUG) &&
       (!idToken || idToken === "DEV") &&
-      bodyPhone
-    ) {
+      bodyPhone;
+
+    if (allowDevPhoneBypass) {
       phoneNumber = bodyPhone;
+      console.warn(`[OTP_DEBUG] phone bypass for ${phoneNumber}`);
     } else {
-      const decoded = await admin.auth().verifyIdToken(idToken);
-      phoneNumber = decoded.phone_number;
+      if (!idToken || idToken === "DEV") {
+        return BadRequestErrorResponse(
+          res,
+          "Invalid phone verification. Use a real device SMS OTP, or enable OTP_DEBUG for simulator testing."
+        );
+      }
+      try {
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        phoneNumber = decoded.phone_number;
+      } catch (tokenError: any) {
+        printError(tokenError, "httpSignUpWithNumber.verifyIdToken");
+        return BadRequestErrorResponse(
+          res,
+          "Invalid or expired phone OTP. Please request a new code."
+        );
+      }
     }
 
     if (!phoneNumber) {
@@ -88,7 +105,7 @@ export const httpSignUpWithNumber = async (req: Request, res: Response) => {
       uuid: redisUser?.uuid || uuid,
       phoneNumber,
       onboardingSteps: {
-        emailVerified: redisUser?.onboardingSteps.emailVerified || false,
+        emailVerified: redisUser?.onboardingSteps?.emailVerified || false,
         phoneVerified: true,
       },
     };
@@ -96,10 +113,7 @@ export const httpSignUpWithNumber = async (req: Request, res: Response) => {
     redisUser = await saveOnboardingUserToRedis(redisUser);
     if (deviceInfo) {
       // save device in redis
-      const savedDevice = await saveDeviceInfoToRedis(
-        redisUser.uuid,
-        deviceInfo
-      );
+      await saveDeviceInfoToRedis(redisUser.uuid, deviceInfo);
     }
     return SuccessResponse(
       res,
