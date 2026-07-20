@@ -122,7 +122,8 @@ export const httpSignUpWithNumber = async (req: Request, res: Response) => {
  */
 export const httpSignupAndGetOTP = async (req: Request, res: Response) => {
   try {
-    const { uuid, email } = req.body;
+    const uuid = req.body.uuid;
+    const email = String(req.body.email || "").trim().toLowerCase();
 
     // 1. check user in mongoDB, DB will have verified users only
     const existingUser = await UserService.getUserByEmail(email);
@@ -209,7 +210,8 @@ export const httpSignupAndGetOTP = async (req: Request, res: Response) => {
  */
 export const httpVerifySignupOTP = async (req: Request, res: Response) => {
   try {
-    const { email, otp } = req.body;
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const otp = String(req.body.otp || "").trim();
     const otpDoc = await getOTPFromRedis(email, otp);
     if (!otpDoc) {
       return ErrorResponse(
@@ -255,7 +257,7 @@ export const httpVerifySignupOTP = async (req: Request, res: Response) => {
  */
 export const httpResendSignupOTP = async (req: Request, res: Response) => {
   try {
-    const { email } = req.body;
+    const email = String(req.body.email || "").trim().toLowerCase();
     const user = await getRedisUser("email", email);
     if (!user) {
       return NotFoundErrorResponse(res);
