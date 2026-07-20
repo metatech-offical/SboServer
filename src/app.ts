@@ -179,6 +179,7 @@ export default async () => {
       console.log("App started on " + PORT);
     });
   } catch (error) {
-    console.log(error);
+    console.error("Failed to start server:", error);
+    process.exit(1);
   }
 };
