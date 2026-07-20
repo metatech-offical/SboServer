@@ -32,6 +32,11 @@ const envSchema = Joi.object({
   GOOGLE_CLIENT_SECRET: Joi.string().optional().allow(""),
 
   // Email Configuration (Optional - for sending emails)
+  // Railway Hobby blocks SMTP — prefer RESEND_API_KEY (HTTPS)
+  RESEND_API_KEY: Joi.string().optional().allow(""),
+  RESEND_FROM: Joi.string().optional().allow(""),
+  // Temporary: include OTP in API responses while email is being set up
+  OTP_DEBUG: Joi.string().valid("true", "false").default("false"),
   EMAIL_HOST: Joi.string().optional().allow(""),
   EMAIL_PORT: Joi.string().optional().allow(""),
   EMAIL_SENDER_MAIL: Joi.string().optional().allow(""),
@@ -102,8 +107,10 @@ if (!env.AWS_ACCESS_KEY_ID || !env.AWS_S3_BUCKET_NAME) {
 if (!env.STRIPE_API_KEY) {
   optionalWarnings.push("STRIPE_API_KEY not set - payment features will not work");
 }
-if (!env.EMAIL_HOST || !env.EMAIL_SENDER_PASSWORD) {
-  optionalWarnings.push("Email configuration incomplete - email sending may not work");
+if (!env.RESEND_API_KEY && (!env.EMAIL_HOST || !env.EMAIL_SENDER_PASSWORD)) {
+  optionalWarnings.push(
+    "Email not configured (set RESEND_API_KEY for Railway, or SMTP vars for local) - OTP emails will fail"
+  );
 }
 if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
   optionalWarnings.push("Google OAuth not configured - social login will not work");
@@ -137,6 +144,8 @@ export const JWT_SECRET = env.JWT_SECRET;
 export const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID || "";
 export const GOOGLE_CLIENT_SECRET = env.GOOGLE_CLIENT_SECRET || "";
 
+export const RESEND_API_KEY = env.RESEND_API_KEY || "";
+export const OTP_DEBUG = env.OTP_DEBUG === "true";
 export const EMAIL_HOST = env.EMAIL_HOST;
 export const EMAIL_PORT = env.EMAIL_PORT || "";
 export const EMAIL_SENDER_MAIL = env.EMAIL_SENDER_MAIL || "";

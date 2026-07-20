@@ -40,7 +40,7 @@ import {
 import UserModel from "../../models/user/user.schema";
 import { admin } from "../../config/firebase";
 import DeviceModel from "../../models/device/device.schema";
-import { NODE_ENV } from "../../config/environment";
+import { NODE_ENV, OTP_DEBUG } from "../../config/environment";
 
 // We can user this API for signin and signup both as it creates user if not present
 export const httpSignUpWithNumber = async (req: Request, res: Response) => {
@@ -175,14 +175,28 @@ export const httpSignupAndGetOTP = async (req: Request, res: Response) => {
       redisUser = result[0].value; // This is user from saveOnboardingUserToRedis
     }
 
-    // 6. Send OTP on email
-    sendMail(email, "Verify Your Account", SIGNUP_EMAIL_CONTENT(otp));
+    // 6. Send OTP on email (Railway Hobby blocks SMTP — uses Resend HTTPS when configured)
+    try {
+      await sendMail(email, "Verify Your Account", SIGNUP_EMAIL_CONTENT(otp));
+    } catch (mailError: any) {
+      console.error("Signup OTP email failed:", mailError?.message || mailError);
+      if (!OTP_DEBUG) {
+        return ErrorResponse(
+          res,
+          STATUS_CODES.INTERNAL_SERVER_ERROR,
+          false,
+          "Failed to send OTP email. Please try again shortly."
+        );
+      }
+      console.warn(`[OTP_DEBUG] signup OTP for ${email}: ${otp}`);
+    }
+
     return SuccessResponse(
       res,
       STATUS_CODES.OK,
       true,
       `OTP sent successfully on email`,
-      redisUser
+      OTP_DEBUG ? { ...redisUser, debugOtp: otp } : redisUser
     );
   } catch (error) {
     printError(error, "httpSignupAndGetOTP");
@@ -254,13 +268,30 @@ export const httpResendSignupOTP = async (req: Request, res: Response) => {
 
     const otp = generateOTP();
     await saveSignupOTPtoRedis(email, otp);
-    sendMail(
-      email,
-      "Resend Verification OTP",
-      RESEND_SIGNUP_OTP_EMAIL_CONTENT(otp)
-    );
+    try {
+      await sendMail(
+        email,
+        "Resend Verification OTP",
+        RESEND_SIGNUP_OTP_EMAIL_CONTENT(otp)
+      );
+    } catch (mailError: any) {
+      console.error("Resend OTP email failed:", mailError?.message || mailError);
+      if (!OTP_DEBUG) {
+        return ErrorResponse(
+          res,
+          STATUS_CODES.INTERNAL_SERVER_ERROR,
+          false,
+          "Failed to send OTP email. Please try again shortly."
+        );
+      }
+      console.warn(`[OTP_DEBUG] resend OTP for ${email}: ${otp}`);
+    }
 
-    return SuccessOKResponse(res, null, OTP_MESSAGES.SUCCESS);
+    return SuccessOKResponse(
+      res,
+      OTP_DEBUG ? { debugOtp: otp } : null,
+      OTP_MESSAGES.SUCCESS
+    );
   } catch (error) {
     printError(error, "httpResendSignupOTP");
     return ErrorResponse(res);
