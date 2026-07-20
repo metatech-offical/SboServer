@@ -174,7 +174,8 @@ export default async () => {
       retryWrites: true,
       retryReads: true,
     });
-    server.listen(PORT, () => {
+    // Bind 0.0.0.0 so Railway public networking can reach the process
+    server.listen(PORT, "0.0.0.0", () => {
       console.log("App started on " + PORT);
     });
   } catch (error) {
