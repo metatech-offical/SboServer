@@ -13,7 +13,7 @@ const DeviceSchema = new Schema<IDevice>(
     OSVersion: { type: String, required: false },
     active: { type: Boolean, default: true },
     userId: { type: Types.ObjectId, ref: collectionNames.USER, required: true },
-    fcmToken: { type: String, required: true },
+    fcmToken: { type: String, required: false, default: "" },
   },
   { timestamps: true }
 );

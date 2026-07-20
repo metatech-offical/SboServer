@@ -1,7 +1,12 @@
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 import s3Client from "../config/s3";
-import { AWS_REGION, AWS_S3_BUCKET_NAME } from "../config/environment";
+import {
+  AWS_REGION,
+  AWS_S3_BUCKET_NAME,
+  AWS_S3_ENDPOINT,
+  AWS_S3_PUBLIC_URL,
+} from "../config/environment";
 import { ReadStream } from "fs";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -54,7 +59,15 @@ export const deleteFileFromS3 = async (
 };
 
 export const getPublicUrlFromS3 = (bucketName: string, key: string): string => {
-  return `https://s3.${AWS_REGION}.amazonaws.com/${bucketName}/${key}`;
+  const cleanKey = key.replace(/^\//, "");
+  if (AWS_S3_PUBLIC_URL) {
+    return `${AWS_S3_PUBLIC_URL.replace(/\/$/, "")}/${cleanKey}`;
+  }
+  if (AWS_S3_ENDPOINT) {
+    // Path-style fallback for R2 when public URL is not configured yet
+    return `${AWS_S3_ENDPOINT.replace(/\/$/, "")}/${bucketName}/${cleanKey}`;
+  }
+  return `https://s3.${AWS_REGION}.amazonaws.com/${bucketName}/${cleanKey}`;
 };
 
 export const extractKeyFromPresignedUrl = (
@@ -66,6 +79,10 @@ export const extractKeyFromPresignedUrl = (
     const pathParts = url.pathname.split("/");
     // Remove the first empty string from split
     pathParts.shift();
+    // For R2 path-style URLs, first segment is bucket name
+    if (AWS_S3_ENDPOINT && pathParts[0] === AWS_S3_BUCKET_NAME) {
+      pathParts.shift();
+    }
     return pathParts.join("/");
   } catch (error) {
     console.error("Error extracting key from URL:", error);

@@ -40,13 +40,26 @@ import {
 import UserModel from "../../models/user/user.schema";
 import { admin } from "../../config/firebase";
 import DeviceModel from "../../models/device/device.schema";
+import { NODE_ENV } from "../../config/environment";
 
 // We can user this API for signin and signup both as it creates user if not present
 export const httpSignUpWithNumber = async (req: Request, res: Response) => {
   try {
-    const { uuid, idToken, deviceInfo } = req.body;
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const phoneNumber = decoded.phone_number;
+    const { uuid, idToken, deviceInfo, phoneNumber: bodyPhone } = req.body;
+    let phoneNumber: string | undefined;
+
+    // Local/dev bypass: accept phoneNumber directly when Firebase SMS is unavailable
+    if (
+      NODE_ENV === "development" &&
+      (!idToken || idToken === "DEV") &&
+      bodyPhone
+    ) {
+      phoneNumber = bodyPhone;
+    } else {
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      phoneNumber = decoded.phone_number;
+    }
+
     if (!phoneNumber) {
       return SuccessResponse(
         res,
@@ -296,7 +309,10 @@ export const httpCompleteUserProfile = async (req: Request, res: Response) => {
   try {
     const redisUser = await getRedisUser("uuid", uuid);
     if (!redisUser) {
-      return NotFoundErrorResponse(res, "Account not found");
+      return NotFoundErrorResponse(
+        res,
+        "Signup session expired. Please log in with your username and password."
+      );
     }
 
     if (!redisUser.onboardingSteps.phoneVerified) {
@@ -311,51 +327,65 @@ export const httpCompleteUserProfile = async (req: Request, res: Response) => {
       return BadRequestErrorResponse(res, "Username or password not saved");
     }
 
-    const newUser = new UserModel({
-      email: redisUser.email,
-      phoneNumber: redisUser.phoneNumber,
-      username: redisUser.username,
-      password: redisUser.password,
-      membership: membership,
-      verified: true,
-    });
-    (newUser as any).isPasswordHashed = true;
-    await newUser.save();
+    // Idempotent: account may already exist if complete-profile was called before
+    let user =
+      (await UserService.getUserByEmail(redisUser.email)) ||
+      (await UserService.getUserByUsername(redisUser.username));
 
-    const deviceInfo = await getDeviceInfoFromRedis(uuid);
-    if (deviceInfo) {
-      await DeviceModel.create({
-        ...deviceInfo,
-        userId: newUser._id,
+    if (!user) {
+      const newUser = new UserModel({
+        email: redisUser.email,
+        phoneNumber: redisUser.phoneNumber,
+        username: redisUser.username,
+        password: redisUser.password,
+        membership: membership,
+        verified: true,
       });
-    }
+      (newUser as any).isPasswordHashed = true;
+      await newUser.save();
+      user = newUser;
 
-    // If membership is creator, create default store
-    if (membership === MembershipLevel.CREATOR) {
-      await StoreService.createStore({
-        ownerId: newUser._id,
-        name: newUser.username,
-      });
-    }
+      const deviceInfo = await getDeviceInfoFromRedis(uuid);
+      if (deviceInfo?.fcmToken) {
+        await DeviceModel.create({
+          ...deviceInfo,
+          OSVersion: String(deviceInfo.OSVersion ?? ""),
+          userId: user._id,
+        });
+      }
 
-    if (!newUser) {
-      return ErrorResponse(
-        res,
-        STATUS_CODES.INTERNAL_SERVER_ERROR,
-        false,
-        "Failed to complete profile"
-      );
+      if (membership === MembershipLevel.CREATOR) {
+        await StoreService.createStore({
+          ownerId: user._id,
+          name: user.username,
+        });
+      }
+    } else if (membership && user.membership !== membership) {
+      user.membership = membership;
+      await user.save();
+      if (membership === MembershipLevel.CREATOR) {
+        const existingStore = await StoreService.getStoreByOwnerId(user._id);
+        if (!existingStore) {
+          try {
+            await StoreService.createStore({
+              ownerId: user._id,
+              name: user.username,
+            });
+          } catch (_) {
+            // store may already exist
+          }
+        }
+      }
     }
 
     await deleteUserDataFromRedis(redisUser);
 
-    // JWT token for app
     const token = generateJwtToken(
-      { id: newUser?._id, email: newUser?.email },
+      { id: user?._id, email: user?.email },
       JWT_TOKEN_EXPIRY
     );
 
-    const userResponse = newUser?.toObject();
+    const userResponse = user?.toObject();
     delete userResponse.password;
     return SuccessResponse(
       res,

@@ -38,11 +38,13 @@ const envSchema = Joi.object({
   EMAIL_USERNAME: Joi.string().default("apiKey"),
   EMAIL_SENDER_PASSWORD: Joi.string().optional().allow(""),
 
-  // AWS S3 (Optional - for file uploads)
+  // AWS S3 / Cloudflare R2 (Optional - for file uploads)
   AWS_ACCESS_KEY_ID: Joi.string().optional().allow(""),
   AWS_SECRET_ACCESS_KEY: Joi.string().optional().allow(""),
   AWS_REGION: Joi.string().optional().allow(""),
   AWS_S3_BUCKET_NAME: Joi.string().optional().allow(""),
+  AWS_S3_ENDPOINT: Joi.string().optional().allow(""),
+  AWS_S3_PUBLIC_URL: Joi.string().optional().allow(""),
 
   // Stripe (Optional - for payments)
   STRIPE_API_KEY: Joi.string().optional().allow(""),
@@ -145,6 +147,8 @@ export const AWS_ACCESS_KEY_ID = env.AWS_ACCESS_KEY_ID || "";
 export const AWS_SECRET_ACCESS_KEY = env.AWS_SECRET_ACCESS_KEY || "";
 export const AWS_REGION = env.AWS_REGION || "";
 export const AWS_S3_BUCKET_NAME = env.AWS_S3_BUCKET_NAME || "";
+export const AWS_S3_ENDPOINT = env.AWS_S3_ENDPOINT || "";
+export const AWS_S3_PUBLIC_URL = env.AWS_S3_PUBLIC_URL || "";
 
 export const STRIPE_API_KEY = env.STRIPE_API_KEY || "";
 export const STRIPE_WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET || "";
