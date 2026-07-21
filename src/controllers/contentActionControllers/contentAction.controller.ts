@@ -336,7 +336,20 @@ export const httpUploadCover = async (req: Request, res: Response) => {
     }
 
     const file = req.file;
-    const fileExtension = file.originalname.split(".").pop();
+    const mimeToExt: Record<string, string> = {
+      "image/jpeg": "jpg",
+      "image/jpg": "jpg",
+      "image/png": "png",
+      "image/gif": "gif",
+      "image/webp": "webp",
+      "image/heic": "heic",
+      "image/heif": "heif",
+    };
+    const extFromName = file.originalname.split(".").pop()?.toLowerCase();
+    const fileExtension =
+      (extFromName && extFromName.length <= 5 ? extFromName : null) ||
+      mimeToExt[file.mimetype] ||
+      "jpg";
     const fileName = `covers/${userId}/${uuidv4()}.${fileExtension}`;
 
     const params = {

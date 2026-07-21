@@ -11,6 +11,7 @@ const s3Client = new S3Client({
   ...(AWS_S3_ENDPOINT
     ? {
         endpoint: AWS_S3_ENDPOINT,
+        forcePathStyle: true,
       }
     : {}),
   credentials: {

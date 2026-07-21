@@ -1,7 +1,15 @@
 import multer from "multer";
 import path from "path";
 
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+];
 const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
 const ALLOWED_MIME_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES];
 
@@ -11,7 +19,18 @@ const fileFilter: multer.Options["fileFilter"] = (req, file, cb) => {
   }
 
   const ext = path.extname(file.originalname).toLowerCase();
-  const allowedExts = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov", ".webm"];
+  const allowedExts = [
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".heic",
+    ".heif",
+    ".mp4",
+    ".mov",
+    ".webm",
+  ];
   if (!allowedExts.includes(ext)) {
     return cb(new Error(`Invalid file extension: ${ext}`));
   }
@@ -28,7 +47,7 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024, files: 5 },
+  limits: { fileSize: 25 * 1024 * 1024, files: 5 },
 });
 
 export const uploadVideo = multer({
