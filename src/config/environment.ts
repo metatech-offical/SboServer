@@ -53,6 +53,7 @@ const envSchema = Joi.object({
 
   // Stripe (Optional - for payments)
   STRIPE_API_KEY: Joi.string().optional().allow(""),
+  STRIPE_PUBLISHABLE_KEY: Joi.string().optional().allow(""),
   STRIPE_WEBHOOK_SECRET: Joi.string().optional().allow(""),
 
   // Redis (Optional - for caching/queues)
@@ -161,6 +162,7 @@ export const AWS_S3_ENDPOINT = env.AWS_S3_ENDPOINT || "";
 export const AWS_S3_PUBLIC_URL = env.AWS_S3_PUBLIC_URL || "";
 
 export const STRIPE_API_KEY = env.STRIPE_API_KEY || "";
+export const STRIPE_PUBLISHABLE_KEY = env.STRIPE_PUBLISHABLE_KEY || "";
 export const STRIPE_WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET || "";
 
 export const REDIS_URL = env.REDIS_URL || "";

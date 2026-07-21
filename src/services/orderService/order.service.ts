@@ -22,6 +22,12 @@ import {
 import { IUser } from "../../models/user/user.type";
 import { ENotificationType } from "../../models/notification/notification.types";
 import { StoreProduct } from "../../models/store/storeProducts.schema";
+import stripe from "../../config/stripe";
+import {
+  STRIPE_API_KEY,
+  STRIPE_PUBLISHABLE_KEY,
+} from "../../config/environment";
+import logger from "../../config/logger";
 
 /**
  * Fetch address of a user based on addressId
@@ -115,13 +121,26 @@ export const createOrder = async ({
     })
   );
 
-  // TODO : Save order (dummy payment info for now)
-  const paymentInfo = {
-    paymentId: "fefe122",
-    provider: "stipe",
-    status: "pending",
-  };
- 
+  if (!STRIPE_API_KEY) {
+    return ResultDB(
+      STATUS_CODES.INTERNAL_SERVER_ERROR,
+      false,
+      "Payment is not configured. Please try again later.",
+      null
+    );
+  }
+
+  const amountInFils = Math.round(totalAmount * 100);
+  if (amountInFils < 200) {
+    // Stripe AED minimum is typically 2.00 AED
+    return ResultDB(
+      STATUS_CODES.BAD_REQUEST,
+      false,
+      "Order amount is too low to process payment.",
+      null
+    );
+  }
+
   const orderDoc = await OrderModel.create({
     userId,
     storeId: products[0].storeId,
@@ -140,53 +159,134 @@ export const createOrder = async ({
     },
     items: orderItems,
     totalAmount,
-    payment: paymentInfo,
+    payment: {
+      paymentId: "pending",
+      provider: "stripe",
+      status: "pending",
+    },
   });
 
-  if (checkoutType === "from_cart") {
-    await CartService.clearCart({ userId });
+  let paymentIntent;
+  try {
+    paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInFils,
+      currency: "aed",
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        orderId: String(orderDoc._id),
+        userId: String(userId),
+        creatorId: String(creatorId),
+        checkoutType,
+      },
+    });
+  } catch (err) {
+    printError(err, "createOrder.paymentIntent");
+    await OrderModel.findByIdAndDelete(orderDoc._id);
+    return ResultDB(
+      STATUS_CODES.INTERNAL_SERVER_ERROR,
+      false,
+      "Failed to start payment. Please try again.",
+      null
+    );
   }
 
-  // send notification to creator
-  const sentToCreator = await NotificationService.sendNotification({
-    userId: String(creatorId),
-    senderId: String(userId),
-    type: ENotificationType.orderPlace,
-    contentId: String(orderDoc._id),
-    contentType: collectionNames.ORDER as ENotificationContentType,
-    notificationText: NOTIFICATION_BODY.ORDER_PLACED(
-      "user",
-      String(orderDoc._id)
-    ),
-    pushNotificationContent: {
-      title: NOTIFICATION_TITLE.ORDER_PLACED,
-      body: NOTIFICATION_BODY.ORDER_PLACED("user", String(orderDoc._id)),
-    },
-  });
+  orderDoc.payment.paymentId = paymentIntent.id;
+  await orderDoc.save();
 
-  // send notification to user
-  const sentToUser = await NotificationService.sendNotification({
-    userId: String(userId),
-    senderId: String(creatorId),
-    type: ENotificationType.orderPlace,
-    contentId: String(orderDoc._id),
-    contentType: collectionNames.ORDER as ENotificationContentType,
-    notificationText: NOTIFICATION_BODY.ORDER_PLACED(
-      "user",
-      String(orderDoc._id)
-    ),
-    pushNotificationContent: {
-      title: NOTIFICATION_TITLE.ORDER_PLACED,
-      body: NOTIFICATION_BODY.ORDER_PLACED("user", String(orderDoc._id)),
-    },
-  });
+  // Cart is cleared after successful payment (see markOrderPaidByPaymentIntent)
 
   return ResultDB(STATUS_CODES.OK, true, ORDER_MESSAGES.ORDER_CREATED, {
     orderId: orderDoc._id,
     amount: orderDoc.totalAmount,
     status: orderDoc.status,
     order: orderDoc,
+    clientSecret: paymentIntent.client_secret,
+    publishableKey: STRIPE_PUBLISHABLE_KEY || undefined,
+    paymentIntentId: paymentIntent.id,
   });
+};
+
+/**
+ * Mark order paid from Stripe webhook (payment_intent.succeeded).
+ * Clears cart when checkout was from_cart. Sends place-order notifications once.
+ */
+export const markOrderPaidByPaymentIntent = async (
+  paymentIntentId: string,
+  metadata?: Record<string, string>
+) => {
+  const order =
+    (await OrderModel.findOne({ "payment.paymentId": paymentIntentId })) ||
+    (metadata?.orderId
+      ? await OrderModel.findById(metadata.orderId)
+      : null);
+
+  if (!order) {
+    logger.warn("Stripe payment succeeded but order not found", {
+      paymentIntentId,
+      orderId: metadata?.orderId,
+    });
+    return null;
+  }
+
+  if (order.payment.status === "success") {
+    return order;
+  }
+
+  order.payment.status = "success";
+  order.payment.paymentId = paymentIntentId;
+  order.payment.paidAt = new Date();
+  await order.save();
+
+  const checkoutType = metadata?.checkoutType;
+  if (checkoutType === "from_cart") {
+    await CartService.clearCart({ userId: order.userId });
+  }
+
+  await NotificationService.sendNotification({
+    userId: String(order.creatorId),
+    senderId: String(order.userId),
+    type: ENotificationType.orderPlace,
+    contentId: String(order._id),
+    contentType: collectionNames.ORDER as ENotificationContentType,
+    notificationText: NOTIFICATION_BODY.ORDER_PLACED(
+      "user",
+      String(order._id)
+    ),
+    pushNotificationContent: {
+      title: NOTIFICATION_TITLE.ORDER_PLACED,
+      body: NOTIFICATION_BODY.ORDER_PLACED("user", String(order._id)),
+    },
+  });
+
+  await NotificationService.sendNotification({
+    userId: String(order.userId),
+    senderId: String(order.creatorId),
+    type: ENotificationType.orderPlace,
+    contentId: String(order._id),
+    contentType: collectionNames.ORDER as ENotificationContentType,
+    notificationText: NOTIFICATION_BODY.ORDER_PLACED(
+      "user",
+      String(order._id)
+    ),
+    pushNotificationContent: {
+      title: NOTIFICATION_TITLE.ORDER_PLACED,
+      body: NOTIFICATION_BODY.ORDER_PLACED("user", String(order._id)),
+    },
+  });
+
+  return order;
+};
+
+export const markOrderPaymentFailed = async (paymentIntentId: string) => {
+  const order = await OrderModel.findOne({
+    "payment.paymentId": paymentIntentId,
+  });
+  if (!order || order.payment.status === "success") {
+    return order;
+  }
+  order.payment.status = "failed";
+  await order.save();
+  return order;
 };
 
 // TODO: Apply mongoose transaction in below function
