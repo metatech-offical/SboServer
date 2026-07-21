@@ -1,11 +1,18 @@
 import SMTPTransport from "nodemailer/lib/smtp-transport";
 
 import mailer, { SENDER_NAME } from "../config/mailer";
-import { EMAIL_SENDER_MAIL, RESEND_API_KEY } from "../config/environment";
+import {
+  EMAIL_SENDER_MAIL,
+  RESEND_API_KEY,
+  RESEND_FROM,
+} from "../config/environment";
 
 /**
  * Send email via Resend HTTPS API (works on Railway Hobby — SMTP ports are blocked).
  * Falls back to SMTP nodemailer for local development.
+ *
+ * For Resend production sending, set:
+ *   RESEND_FROM=SBO <noreply@your-verified-domain.com>
  */
 export const sendMail = async (
   to: string,
@@ -14,11 +21,21 @@ export const sendMail = async (
   html: boolean = false
 ): Promise<void> => {
   if (RESEND_API_KEY) {
+    // Prefer RESEND_FROM (verified domain). Never fall back to onboarding@resend.dev
+    // in production — that only allows sending to the Resend account email.
     const from =
-      process.env.RESEND_FROM ||
-      (EMAIL_SENDER_MAIL
+      RESEND_FROM ||
+      (EMAIL_SENDER_MAIL && !EMAIL_SENDER_MAIL.endsWith("@gmail.com")
         ? `${SENDER_NAME} <${EMAIL_SENDER_MAIL}>`
-        : "SBO <onboarding@resend.dev>");
+        : "");
+
+    if (!from) {
+      throw new Error(
+        "RESEND_FROM is required (e.g. SBO <noreply@metatech.ae>). Gmail cannot be used as Resend From."
+      );
+    }
+
+    console.log(`Sending via Resend from=${from} to=${to}`);
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -54,7 +71,7 @@ export const sendMail = async (
   const fromAddress = EMAIL_SENDER_MAIL;
   if (!fromAddress) {
     throw new Error(
-      "Email not configured. Set RESEND_API_KEY (Railway) or EMAIL_SENDER_MAIL + SMTP vars (local)."
+      "Email not configured. Set RESEND_API_KEY + RESEND_FROM (Railway) or EMAIL_SENDER_MAIL + SMTP vars (local)."
     );
   }
 

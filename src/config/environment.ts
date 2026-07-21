@@ -145,6 +145,7 @@ export const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID || "";
 export const GOOGLE_CLIENT_SECRET = env.GOOGLE_CLIENT_SECRET || "";
 
 export const RESEND_API_KEY = env.RESEND_API_KEY || "";
+export const RESEND_FROM = env.RESEND_FROM || "";
 export const OTP_DEBUG = env.OTP_DEBUG === "true";
 export const EMAIL_HOST = env.EMAIL_HOST;
 export const EMAIL_PORT = env.EMAIL_PORT || "";
