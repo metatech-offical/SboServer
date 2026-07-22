@@ -239,7 +239,8 @@ export const liveStreamEnded = async (payload: IWebhookStreamStarted) => {
     findStream.endedAt = new Date();
 
     const result = await findStream.save();
-    streamIO.emit("new_stream", { roomId: room_id, result });
+    streamIO?.emit("new_stream", { roomId: room_id, result });
+    mainIO?.emit("new_stream", { roomId: room_id, result });
 
     return ResultDB(
       STATUS_CODES.OK,
