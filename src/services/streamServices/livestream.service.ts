@@ -16,7 +16,7 @@ import {
   SERVER_SECRET,
   ZEGOCLOUD_CALLBACK_SECRET,
 } from "../../config/environment";
-import { streamIO } from "../../sockets/main";
+import { streamIO, mainIO } from "../../sockets/main";
 import LikeModel from "../../models/contentActions/like.schema";
 import { EContentType } from "../../constants/collectionNames";
 import UserFollowModel from "../../models/user/userFollow.schema";
@@ -41,14 +41,23 @@ export const createLiveStream = async (
     });
     const newStream = new StreamModel({
       creatorId: userId,
-      status: "draft",
+      // Mark live immediately so viewers can discover the stream without
+      // waiting for the Zego webhook (often misconfigured / APPID mismatch).
+      status: "published",
       type: "video-live",
-      isLive: false,
+      isLive: true,
       token,
       roomId,
       ...newStreamData,
     });
     const result = await newStream.save();
+
+    try {
+      streamIO?.emit("new_stream", { roomId, result });
+      mainIO?.emit("new_stream", { roomId, result });
+    } catch (emitErr) {
+      console.warn("Failed to emit new_stream:", emitErr);
+    }
 
     return ResultDB(
       STATUS_CODES.CREATED,
@@ -180,7 +189,8 @@ export const liveStreamStarted = async (payload: IWebhookStreamStarted) => {
     }
 
     const result = await findStream.save();
-    streamIO.emit("new_stream", { roomId: room_id, result });
+    streamIO?.emit("new_stream", { roomId: room_id, result });
+    mainIO?.emit("new_stream", { roomId: room_id, result });
 
     return ResultDB(
       STATUS_CODES.OK,
